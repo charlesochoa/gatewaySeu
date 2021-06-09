@@ -85,6 +85,32 @@ void startConnectionFlash (int period) {
 #endif // ESP32
 }
 
+bool sendDataToLeonardo(char * payload) {
+  char confMsg[] = "ok";
+
+  char input[100];
+  for ( int s = 0; s < 4; s++ ) {
+
+    Serial.write(payload);
+    bool received = false;
+    int i = 0;
+    for (int t = 0; t < 1000 ; t++) {
+      if (Serial.available() ) {
+        char inChar = (char)Serial.read();
+        // add it to the inputString:
+        input[i] = inChar;
+        i++;
+        if (inChar == 'k') {
+          return strcmp (confMsg, input) == 0;
+        }
+        if (i == 99) {
+          return false;
+        }
+      }
+    }
+  }
+}
+
 void stopConnectionFlash () {
 #ifdef ESP32
   if (connectionLedFlashing) {
@@ -137,7 +163,6 @@ void processRxData (uint8_t* mac, uint8_t* buffer, uint8_t length, uint16_t lost
     DynamicJsonDocument jsonBuffer (capacity);
     JsonArray root = jsonBuffer.createNestedArray ();
     CayenneLPP cayennelpp (MAX_DATA_PAYLOAD_SIZE);
-    Serial.write("Cayenne.\n");
     cayennelpp.decode ((uint8_t*)buffer, length, root);
     uint8_t error = cayennelpp.getError ();
     if (error != LPP_ERROR_OK) {
@@ -146,7 +171,6 @@ void processRxData (uint8_t* mac, uint8_t* buffer, uint8_t length, uint16_t lost
     }
     pld_size = serializeJson (root, payload, PAYLOAD_SIZE);
   } else if (payload_type == MSG_PACK) {
-    Serial.write("MSG_PACK.\n");
     const int capacity = JSON_ARRAY_SIZE (25) + 25 * JSON_OBJECT_SIZE (4);
     DynamicJsonDocument jsonBuffer (capacity);
     DeserializationError error = deserializeMsgPack (jsonBuffer, buffer, length);
@@ -156,7 +180,6 @@ void processRxData (uint8_t* mac, uint8_t* buffer, uint8_t length, uint16_t lost
     }
     pld_size = serializeJson (jsonBuffer, payload, PAYLOAD_SIZE);
   } else if (payload_type == RAW) {
-    Serial.write("RAW.\n");
     if (length <= PAYLOAD_SIZE) {
       memcpy (payload, buffer, length);
       pld_size = length;
@@ -168,7 +191,7 @@ void processRxData (uint8_t* mac, uint8_t* buffer, uint8_t length, uint16_t lost
 
   GwOutput.outputDataSend (mac_str, payload, pld_size);
   DEBUG_INFO ("Published data message from %s: %s", mac_str, payload);
-    Serial.write(payload);
+  sendDataToLeonardo(payload);
   if (lostMessages > 0) {
     pld_size = snprintf (payload, PAYLOAD_SIZE, "%u", lostMessages);
     GwOutput.outputDataSend (mac_str, payload, pld_size, GwOutput_data_type::lostmessages);
